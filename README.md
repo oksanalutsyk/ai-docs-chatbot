@@ -39,6 +39,9 @@ cp .env.example .env
 Add your API key from [console.anthropic.com](https://console.anthropic.com):
 ANTHROPIC_API_KEY=your-api-key-here
 
+Add your API key from [dash.voyageai.com](https://dashboard.voyageai.com/organization/projects):
+VOYAGE_API_KEY=your-voyage-key-here
+
 
 ### 4. Run
 
