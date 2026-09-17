@@ -14,7 +14,10 @@ Query reformulation        ← Claude rewrites follow-up questions into standalo
 Embedding (Voyage AI)      ← question → vector
      │
      ▼
-Vector search (MongoDB)    ← find top-5 similar chunks from the doc corpus
+Vector search (MongoDB)    ← fetch top-10 candidate chunks
+     │
+     ▼
+Reranking (Voyage AI)      ← rerank-2 picks top-3 most relevant chunks
      │
      ▼
 Generate answer (Claude)   ← stream the response with retrieved context
@@ -29,8 +32,8 @@ Multi-turn conversation history is maintained across turns. Follow-up questions 
 | Language | TypeScript (strict mode) |
 | AI | Claude Haiku 4.5 (chat + reformulation) |
 | Embeddings | Voyage AI `voyage-3-lite` |
+| Reranking | Voyage AI `rerank-2` |
 | Vector DB | MongoDB Atlas Vector Search |
-| HTTP | Axios |
 | Runtime | Node.js + tsx |
 
 ## Project Structure
@@ -45,7 +48,7 @@ src/
 ├── services/
 │   ├── ragService.ts     # main RAG pipeline
 │   ├── documentLoader.ts # GitHub fetching + markdown-aware chunking
-│   ├── embeddings.ts     # Voyage AI embedding + cosine similarity
+│   ├── embeddings.ts     # Voyage AI embedding, cosine similarity, reranking
 │   └── vectorStore.ts    # MongoDB insert, search, clear
 ├── utils/
 │   └── retry.ts          # exponential backoff for API calls

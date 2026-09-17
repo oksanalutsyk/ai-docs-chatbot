@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { generateEmbedding } from './embeddings';
+import { generateEmbedding, rerankDocuments } from './embeddings';
 import { vectorSearch } from './vectorStore';
 import { withRetry } from '../utils/retry';
 import { ANTHROPIC_API_KEY, MODELS, RAG, RETRY } from '../config';
@@ -81,14 +81,17 @@ export async function askWithRAG(
     RETRY.initialDelayMs
   );
 
-  // Step 3: find the most relevant chunks from MongoDB
-  const relevantChunks = await vectorSearch(queryEmbedding, RAG.topK);
+  // Step 3: find candidate chunks from MongoDB (fetch more than needed for reranking)
+  const candidates = await vectorSearch(queryEmbedding, RAG.topKCandidates);
 
-  if (relevantChunks.length === 0) {
+  if (candidates.length === 0) {
     return { answer: 'No relevant documentation found for your question.', sources: [] };
   }
 
-  // Step 4: build context-aware system prompt
+  // Step 4: rerank candidates to surface the most relevant chunks
+  const relevantChunks = await rerankDocuments(standaloneQuestion, candidates, RAG.topKReranked);
+
+  // Step 5: build context-aware system prompt
   const systemPrompt = buildSystemPrompt(relevantChunks);
 
   const sources = relevantChunks.map((c) => ({
@@ -96,7 +99,7 @@ export async function askWithRAG(
     score: (c.score as number).toFixed(3),
   }));
 
-  // Step 5: generate response (streaming or regular)
+  // Step 6: generate response (streaming or regular)
   if (onToken) {
     let fullAnswer = '';
 

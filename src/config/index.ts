@@ -40,6 +40,8 @@ export const MODELS = {
   reformulation: 'claude-haiku-4-5',
   /** Voyage AI embedding model */
   embedding: 'voyage-3-lite',
+  /** Voyage AI reranking model */
+  rerank: 'rerank-2',
 } as const;
 
 // --- RAG settings ---
@@ -52,6 +54,10 @@ export const RAG = {
   maxReformulationTokens: 100,
   /** Minimum similarity score to consider a chunk relevant */
   minScore: 0.6,
+  /** Number of candidates fetched from vector search before reranking */
+  topKCandidates: 10,
+  /** Number of chunks passed to Claude after reranking */
+  topKReranked: 3,
 } as const;
 
 // --- Chunking settings ---

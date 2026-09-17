@@ -1,5 +1,6 @@
 import { VoyageAIClient } from 'voyageai';
 import { VOYAGE_API_KEY, MODELS } from '../config';
+import type { VectorDocument } from '../types';
 
 const client = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
@@ -42,4 +43,27 @@ export function cosineSimilarity(a: number[], b: number[]): number {
   }
 
   return dotProduct / (magnitudeA * magnitudeB);
+}
+
+/**
+ * Reranks a list of document chunks using Voyage AI rerank-2.
+ * Returns the top-K most relevant chunks, ordered by relevance score descending.
+ *
+ * @param query - The search query
+ * @param documents - Candidate chunks from vector search
+ * @param topK - Number of chunks to return after reranking
+ */
+export async function rerankDocuments(
+  query: string,
+  documents: VectorDocument[],
+  topK: number
+): Promise<VectorDocument[]> {
+  const response = await client.rerank({
+    query,
+    documents: documents.map((d) => d.text),
+    model: MODELS.rerank,
+    topK,
+  });
+
+  return (response.data ?? []).map((item) => documents[item.index!]);
 }
