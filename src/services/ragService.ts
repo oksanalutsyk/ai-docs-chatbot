@@ -23,13 +23,40 @@ CONTEXT:
 ${context}`;
 }
 
+// Reformulate the question using conversation history for better vector search
+async function reformulateQuestion(question: string, history: Message[]): Promise<string> {
+  // If no history — question is already standalone
+  if (history.length === 0) return question;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 100,
+    messages: [
+      {
+        role: 'user',
+        content: `Given this conversation history:
+${history.map((m) => `${m.role}: ${m.content}`).join('\n')}
+
+Reformulate this follow-up question into a single standalone question that contains all necessary context:
+"${question}"
+
+Return only the reformulated question, nothing else.`,
+      },
+    ],
+  });
+
+  const textBlock = response.content.find((block) => block.type === 'text');
+  return textBlock ? textBlock.text.trim() : question;
+}
+
 // Main RAG function: search relevant docs → ask Claude with conversation history
 export async function askWithRAG(
   question: string,
   history: Message[]
 ): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
-  // Step 1: convert question to embedding
-  const queryEmbedding = await generateEmbedding(question, 'query');
+  // Step 1: reformulate question with context, then convert to embedding
+  const standaloneQuestion = await reformulateQuestion(question, history);
+  const queryEmbedding = await generateEmbedding(standaloneQuestion, 'query');
 
   // Step 2: find top-5 most relevant chunks from MongoDB
   const relevantChunks = await vectorSearch(queryEmbedding, 5);
