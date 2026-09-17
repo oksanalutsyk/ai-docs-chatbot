@@ -7,6 +7,12 @@ import type { Message } from '../types';
 
 const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 
+function log(step: string, ms?: number): void {
+  const time = new Date().toTimeString().slice(0, 8);
+  const duration = ms !== undefined ? ` (${ms}ms)` : '';
+  process.stdout.write(`[${time}] ${step}${duration}\n`);
+}
+
 
 /**
  * Builds a system prompt that injects retrieved documentation chunks as context.
@@ -72,24 +78,36 @@ export async function askWithRAG(
   onToken?: (token: string) => void
 ): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
   // Step 1: reformulate follow-up questions for better retrieval
+  let t = Date.now();
+  log('Reformulating question...');
   const standaloneQuestion = await reformulateQuestion(question, history);
+  log('Reformulated', Date.now() - t);
 
   // Step 2: convert question to embedding vector
+  t = Date.now();
+  log('Generating embedding...');
   const queryEmbedding = await withRetry(
     () => generateEmbedding(standaloneQuestion, 'query'),
     RETRY.attempts,
     RETRY.initialDelayMs
   );
+  log('Embedded', Date.now() - t);
 
   // Step 3: find candidate chunks from MongoDB (fetch more than needed for reranking)
+  t = Date.now();
+  log(`Vector search (top-${RAG.topKCandidates})...`);
   const candidates = await vectorSearch(queryEmbedding, RAG.topKCandidates);
+  log(`Found ${candidates.length} candidates`, Date.now() - t);
 
   if (candidates.length === 0) {
     return { answer: 'No relevant documentation found for your question.', sources: [] };
   }
 
   // Step 4: rerank candidates to surface the most relevant chunks
+  t = Date.now();
+  log(`Reranking to top-${RAG.topKReranked}...`);
   const relevantChunks = await rerankDocuments(standaloneQuestion, candidates, RAG.topKReranked);
+  log('Reranked', Date.now() - t);
 
   // Step 5: build context-aware system prompt
   const systemPrompt = buildSystemPrompt(relevantChunks);
@@ -100,6 +118,8 @@ export async function askWithRAG(
   }));
 
   // Step 6: generate response (streaming or regular)
+  t = Date.now();
+  log('Generating answer...');
   if (onToken) {
     let fullAnswer = '';
 
@@ -117,6 +137,8 @@ export async function askWithRAG(
       }
     }
 
+    process.stdout.write('\n');
+    log('Done', Date.now() - t);
     return { answer: fullAnswer, sources };
   }
 
@@ -132,6 +154,7 @@ export async function askWithRAG(
     RETRY.initialDelayMs
   );
 
+  log('Done', Date.now() - t);
   const textBlock = response.content.find((block) => block.type === 'text');
   return {
     answer: textBlock ? textBlock.text : 'No response generated.',

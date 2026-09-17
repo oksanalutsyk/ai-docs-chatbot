@@ -120,6 +120,18 @@ npm run chat
 
 Type your question and press Enter. Type `exit` to quit.
 
+Each query prints step-by-step timing so you can see where the pipeline spends time:
+
+```
+🔍 Searching docs...
+[15:21:15] Reformulating question... (5ms)
+[15:21:17] Embedded (2797ms)
+[15:21:21] Found 10 candidates (3430ms)
+[15:21:21] Reranked (520ms)
+[15:21:21] Generating answer...
+[15:21:26] Done (4994ms)
+```
+
 ## Scripts
 
 | Command | Description |

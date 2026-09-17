@@ -38,10 +38,14 @@ async function main() {
     if (!question.trim()) continue;
 
     try {
-      console.log('\n🔍 Searching docs...\n');
-      process.stdout.write('Assistant: ');
+      console.log('\n🔍 Searching docs...');
 
+      let firstToken = true;
       const { answer, sources } = await askWithRAG(question, history, (token) => {
+        if (firstToken) {
+          process.stdout.write('\nA: ');
+          firstToken = false;
+        }
         process.stdout.write(token);
       });
 
