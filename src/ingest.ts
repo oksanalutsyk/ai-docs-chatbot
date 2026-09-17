@@ -18,6 +18,18 @@ const FOLDER_SOURCES = [
     folder: 'articles',
     source: 'openai-docs',
   },
+    {
+    owner: 'openai',
+    repo: 'openai-cookbook',
+    folder: 'examples/vector_databases',
+    source: 'openai-docs',
+  },
+  {
+    owner: 'openai',
+    repo: 'openai-cookbook',
+    folder: 'examples/evaluation',
+    source: 'openai-docs',
+  }
 ];
 
 // Individual markdown files to fetch via GitHub API (gets correct branch automatically)
@@ -72,8 +84,7 @@ async function ingest() {
 
     console.log(`\nGenerating embeddings and saving to MongoDB...`);
     for (let i = 0; i < chunks.length; i++) {
-      const embedding = await generateEmbedding(chunks[i].text);
-      await insertDocument(chunks[i].text, embedding, chunks[i].source);
+    const embedding = await generateEmbedding(chunks[i].text, 'document');      await insertDocument(chunks[i].text, embedding, chunks[i].source);
       process.stdout.write(`\r  Progress: ${i + 1}/${chunks.length}`);
     }
     totalChunks += chunks.length;
@@ -83,11 +94,15 @@ async function ingest() {
     // Ingest individual files via GitHub API
   console.log('Fetching individual markdown files...');
   for (const file of FILE_SOURCES) {
-    const { data: meta } = await axios.get<{ download_url: string; path: string }>(file.apiUrl);
+const githubHeaders = process.env.GITHUB_TOKEN
+  ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+  : {};
+
+const { data: meta } = await axios.get<{ download_url: string; path: string }>(file.apiUrl, { headers: githubHeaders });
     const { data: content } = await axios.get<string>(meta.download_url);
     const chunks = chunkText(content, file.source, meta.path);
     for (const chunk of chunks) {
-      const embedding = await generateEmbedding(chunk.text);
+      const embedding = await generateEmbedding(chunk.text, 'document');
       await insertDocument(chunk.text, embedding, chunk.source);
     }
     console.log(`  ✓ ${meta.path} → ${chunks.length} chunks`);

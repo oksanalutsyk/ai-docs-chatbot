@@ -24,7 +24,7 @@ ${question}`;
 // Main RAG function: search relevant docs → ask Claude
 export async function askWithRAG(question: string): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
   // Step 1: convert question to embedding
-  const queryEmbedding = await generateEmbedding(question);
+const queryEmbedding = await generateEmbedding(question, 'query');
 
   // Step 2: find top-5 most relevant chunks from MongoDB
   const relevantChunks = await vectorSearch(queryEmbedding, 5);

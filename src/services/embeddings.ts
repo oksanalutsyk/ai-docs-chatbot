@@ -8,12 +8,17 @@ const client = new VoyageAIClient({
  * Generates an embedding vector for a given text.
  *
  * @param text - The input text to embed
+ * @param inputType - 'document' for indexing, 'query' for search queries
  * @returns A numeric vector representing the text
  */
-export async function generateEmbedding(text: string): Promise<number[]> {
+export async function generateEmbedding(
+  text: string,
+  inputType: 'document' | 'query' = 'document'
+): Promise<number[]> {
   const response = await client.embed({
     input: text,
     model: 'voyage-3-lite',
+    inputType,
   });
 
   const embedding = response.data?.[0]?.embedding;
