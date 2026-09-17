@@ -18,7 +18,7 @@ const FOLDER_SOURCES = [
     folder: 'articles',
     source: 'openai-docs',
   },
-    {
+  {
     owner: 'openai',
     repo: 'openai-cookbook',
     folder: 'examples/vector_databases',
@@ -29,11 +29,12 @@ const FOLDER_SOURCES = [
     repo: 'openai-cookbook',
     folder: 'examples/evaluation',
     source: 'openai-docs',
-  }
+  },
 ];
 
-// Individual markdown files to fetch via GitHub API (gets correct branch automatically)
+// Individual markdown files fetched via GitHub API
 const FILE_SOURCES = [
+  // Anthropic courses — API fundamentals and prompting
   {
     apiUrl: 'https://api.github.com/repos/anthropics/courses/contents/anthropic_api_fundamentals/README.md',
     source: 'anthropic-docs',
@@ -49,6 +50,31 @@ const FILE_SOURCES = [
   {
     apiUrl: 'https://api.github.com/repos/anthropics/courses/contents/tool_use/README.md',
     source: 'anthropic-docs',
+  },
+  // Anthropic SDK — streaming helpers (events, chunks, text_stream)
+  {
+    apiUrl: 'https://api.github.com/repos/anthropics/anthropic-sdk-python/contents/helpers.md',
+    source: 'anthropic-docs',
+  },
+  // Anthropic SDK — full API reference (models, tokens, context management)
+  {
+    apiUrl: 'https://api.github.com/repos/anthropics/anthropic-sdk-python/contents/api.md',
+    source: 'anthropic-docs',
+  },
+  // Claude cookbooks — agent SDK with context window management
+  {
+    apiUrl: 'https://api.github.com/repos/anthropics/claude-cookbooks/contents/claude_agent_sdk/README.md',
+    source: 'anthropic-docs',
+  },
+  // Claude cookbooks — capabilities overview (RAG, classification, embeddings)
+  {
+    apiUrl: 'https://api.github.com/repos/anthropics/claude-cookbooks/contents/capabilities/README.md',
+    source: 'anthropic-docs',
+  },
+  // OpenAI Python SDK README — streaming with chunk/event examples
+  {
+    apiUrl: 'https://api.github.com/repos/openai/openai-python/contents/README.md',
+    source: 'openai-docs',
   },
 ];
 
@@ -84,30 +110,39 @@ async function ingest() {
 
     console.log(`\nGenerating embeddings and saving to MongoDB...`);
     for (let i = 0; i < chunks.length; i++) {
-    const embedding = await generateEmbedding(chunks[i].text, 'document');      await insertDocument(chunks[i].text, embedding, chunks[i].source);
+      const embedding = await generateEmbedding(chunks[i].text, 'document');
+      await insertDocument(chunks[i].text, embedding, chunks[i].source);
       process.stdout.write(`\r  Progress: ${i + 1}/${chunks.length}`);
     }
     totalChunks += chunks.length;
     console.log(`\n✓ ${src.source} (${src.folder}): ${chunks.length} chunks saved\n`);
   }
 
-    // Ingest individual files via GitHub API
+  // Ingest individual files via GitHub API
   console.log('Fetching individual markdown files...');
-  for (const file of FILE_SOURCES) {
-const githubHeaders = process.env.GITHUB_TOKEN
-  ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-  : {};
+  const githubHeaders = process.env.GITHUB_TOKEN
+    ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+    : {};
 
-const { data: meta } = await axios.get<{ download_url: string; path: string }>(file.apiUrl, { headers: githubHeaders });
-    const { data: content } = await axios.get<string>(meta.download_url);
-    const chunks = chunkText(content, file.source, meta.path);
-    for (const chunk of chunks) {
-      const embedding = await generateEmbedding(chunk.text, 'document');
-      await insertDocument(chunk.text, embedding, chunk.source);
+  for (const file of FILE_SOURCES) {
+    try {
+      const { data: meta } = await axios.get<{ download_url: string; path: string }>(
+        file.apiUrl,
+        { headers: githubHeaders }
+      );
+      const { data: content } = await axios.get<string>(meta.download_url);
+      const chunks = chunkText(content, file.source, meta.path);
+      for (const chunk of chunks) {
+        const embedding = await generateEmbedding(chunk.text, 'document');
+        await insertDocument(chunk.text, embedding, chunk.source);
+      }
+      console.log(`  ✓ ${meta.path} → ${chunks.length} chunks`);
+      totalChunks += chunks.length;
+    } catch (error) {
+      console.warn(`  ⚠️  Skipped ${file.apiUrl}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
-    console.log(`  ✓ ${meta.path} → ${chunks.length} chunks`);
-    totalChunks += chunks.length;
   }
+
   console.log(`\nIngestion complete! Total chunks: ${totalChunks}`);
   await closeConnection();
 }

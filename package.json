@@ -5,7 +5,10 @@
   "scripts": {
     "start": "tsx src/index.ts",
     "build": "tsc",
-    "test:embeddings": "tsx src/test-embeddings.ts"
+    "test:embeddings": "tsx src/test-embeddings.ts",
+    "chat": "tsx src/chat.ts",
+    "ingest": "tsx src/ingest.ts",
+    "evaluate": "tsx src/evaluate.ts"
   },
   "keywords": [],
   "author": "",
