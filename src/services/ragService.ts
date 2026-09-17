@@ -9,7 +9,7 @@ export interface Message {
   content: string;
 }
 
-// Build a prompt that includes retrieved context chunks
+// Build a system prompt that includes retrieved context chunks
 function buildSystemPrompt(contextChunks: { text: string; source: string }[]): string {
   const context = contextChunks
     .map((chunk, i) => `[${i + 1}] (source: ${chunk.source})\n${chunk.text}`)
@@ -25,7 +25,6 @@ ${context}`;
 
 // Reformulate the question using conversation history for better vector search
 async function reformulateQuestion(question: string, history: Message[]): Promise<string> {
-  // If no history — question is already standalone
   if (history.length === 0) return question;
 
   const response = await anthropic.messages.create({
@@ -49,10 +48,11 @@ Return only the reformulated question, nothing else.`,
   return textBlock ? textBlock.text.trim() : question;
 }
 
-// Main RAG function: search relevant docs → ask Claude with conversation history
+// Main RAG function with optional streaming via onToken callback
 export async function askWithRAG(
   question: string,
-  history: Message[]
+  history: Message[],
+  onToken?: (token: string) => void
 ): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
   // Step 1: reformulate question with context, then convert to embedding
   const standaloneQuestion = await reformulateQuestion(question, history);
@@ -68,23 +68,41 @@ export async function askWithRAG(
   // Step 3: build system prompt with context
   const systemPrompt = buildSystemPrompt(relevantChunks);
 
-  // Step 4: send conversation history + new question to Claude
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages: [
-      ...history,
-      { role: 'user', content: question },
-    ],
-  });
-
-  const textBlock = response.content.find((block) => block.type === 'text');
   const sources = relevantChunks.map((c: any) => ({
     source: c.source,
     score: (c.score as number).toFixed(3),
   }));
 
+  // Step 4: stream or regular response depending on onToken callback
+  if (onToken) {
+    let fullAnswer = '';
+
+    const stream = anthropic.messages.stream({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [...history, { role: 'user', content: question }],
+    });
+
+    for await (const chunk of stream) {
+      if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+        onToken(chunk.delta.text);
+        fullAnswer += chunk.delta.text;
+      }
+    }
+
+    return { answer: fullAnswer, sources };
+  }
+
+  // Non-streaming fallback
+  const response = await anthropic.messages.create({
+    model: 'claude-haiku-4-5',
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [...history, { role: 'user', content: question }],
+  });
+
+  const textBlock = response.content.find((block) => block.type === 'text');
   return {
     answer: textBlock ? textBlock.text : 'No response generated.',
     sources,

@@ -15,7 +15,6 @@ function ask(prompt: string): Promise<string> {
 async function main() {
   console.log('🤖 AI Docs Chatbot (type "exit" to quit)\n');
 
-  // Keep conversation history in memory
   const history: Message[] = [];
 
   while (true) {
@@ -28,21 +27,24 @@ async function main() {
 
     if (!question.trim()) continue;
 
-    console.log("\n🔍 Searching docs...");
-    const { answer, sources } = await askWithRAG(question, history);
+    console.log("\n🔍 Searching docs...\n");
+    process.stdout.write("Assistant: ");
 
-    // Save this exchange to history
-    history.push(
-      { role: "user", content: question },
-      { role: "assistant", content: answer },
-    );
+    // Stream tokens directly to stdout as they arrive
+    const { answer, sources } = await askWithRAG(question, history, (token) => {
+      process.stdout.write(token);
+    });
 
-    console.log(`\nAssistant: ${answer}`);
-    console.log("\n📚 Sources used:");
+    console.log("\n\n📚 Sources used:");
     sources.forEach((s) =>
       console.log(`  • ${s.source} (similarity: ${s.score})`),
     );
     console.log();
+
+    history.push(
+      { role: "user", content: question },
+      { role: "assistant", content: answer },
+    );
   }
 
   rl.close();
