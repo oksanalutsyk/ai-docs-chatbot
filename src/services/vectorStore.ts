@@ -75,3 +75,10 @@ export async function closeConnection(): Promise<void> {
     client = null;
   }
 }
+
+  // Delete all documents from the collection (used before re-ingestion)
+export async function clearDocuments(): Promise<void> {
+  const collection = await getCollection();
+  const result = await collection.deleteMany({});
+  console.log(`🗑️  Cleared ${result.deletedCount} old documents from MongoDB`);
+}
