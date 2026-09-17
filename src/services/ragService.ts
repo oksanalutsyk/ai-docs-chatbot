@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { generateEmbedding } from './embeddings';
 import { vectorSearch } from './vectorStore';
+import { withRetry } from '../utils/retry';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -23,26 +24,28 @@ CONTEXT:
 ${context}`;
 }
 
-// Reformulate the question using conversation history for better vector search
+// Reformulate follow-up questions into standalone questions for better vector search
 async function reformulateQuestion(question: string, history: Message[]): Promise<string> {
   if (history.length === 0) return question;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 100,
-    messages: [
-      {
-        role: 'user',
-        content: `Given this conversation history:
+  const response = await withRetry(() =>
+    anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 100,
+      messages: [
+        {
+          role: 'user',
+          content: `Given this conversation history:
 ${history.map((m) => `${m.role}: ${m.content}`).join('\n')}
 
 Reformulate this follow-up question into a single standalone question that contains all necessary context:
 "${question}"
 
 Return only the reformulated question, nothing else.`,
-      },
-    ],
-  });
+        },
+      ],
+    })
+  );
 
   const textBlock = response.content.find((block) => block.type === 'text');
   return textBlock ? textBlock.text.trim() : question;
@@ -55,8 +58,8 @@ export async function askWithRAG(
   onToken?: (token: string) => void
 ): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
   // Step 1: reformulate question with context, then convert to embedding
-  const standaloneQuestion = await reformulateQuestion(question, history);
-  const queryEmbedding = await generateEmbedding(standaloneQuestion, 'query');
+  const standaloneQuestion = await withRetry(() => reformulateQuestion(question, history));
+  const queryEmbedding = await withRetry(() => generateEmbedding(standaloneQuestion, 'query'));
 
   // Step 2: find top-5 most relevant chunks from MongoDB
   const relevantChunks = await vectorSearch(queryEmbedding, 5);
@@ -95,12 +98,14 @@ export async function askWithRAG(
   }
 
   // Non-streaming fallback
-  const response = await anthropic.messages.create({
-    model: 'claude-haiku-4-5',
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages: [...history, { role: 'user', content: question }],
-  });
+  const response = await withRetry(() =>
+    anthropic.messages.create({
+      model: 'claude-haiku-4-5',
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [...history, { role: 'user', content: question }],
+    })
+  );
 
   const textBlock = response.content.find((block) => block.type === 'text');
   return {

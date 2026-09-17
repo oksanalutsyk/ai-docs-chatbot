@@ -1,4 +1,5 @@
-import { MongoClient, Collection, Document } from 'mongodb';
+import { MongoClient, Collection } from 'mongodb';
+import { withRetry } from '../utils/retry';
 
 // Document structure stored in MongoDB
 interface VectorDocument {
@@ -13,16 +14,13 @@ let client: MongoClient | null = null;
 async function getCollection(): Promise<Collection<VectorDocument>> {
   if (!client) {
     const uri = process.env.MONGODB_URI;
-    if (!uri) {
-      throw new Error('Missing MONGODB_URI environment variable');
-    }
+    if (!uri) throw new Error('Missing MONGODB_URI environment variable');
+
     client = new MongoClient(uri);
-    await client.connect();
+    await withRetry(() => client!.connect(), 3, 1000);
   }
 
-  return client
-    .db('ai-docs-chatbot')
-    .collection<VectorDocument>('documents');
+  return client.db('ai-docs-chatbot').collection<VectorDocument>('documents');
 }
 
 export async function insertDocument(
@@ -31,12 +29,9 @@ export async function insertDocument(
   source: string
 ): Promise<void> {
   const collection = await getCollection();
-  await collection.insertOne({
-    text,
-    embedding,
-    source,
-    createdAt: new Date(),
-  });
+  await withRetry(() =>
+    collection.insertOne({ text, embedding, source, createdAt: new Date() })
+  );
 }
 
 export async function vectorSearch(
@@ -45,8 +40,8 @@ export async function vectorSearch(
 ): Promise<VectorDocument[]> {
   const collection = await getCollection();
 
-  const results = await collection
-    .aggregate<VectorDocument>([
+  return withRetry(() =>
+    collection.aggregate<VectorDocument>([
       {
         $vectorSearch: {
           index: 'vector_index',
@@ -63,10 +58,14 @@ export async function vectorSearch(
           score: { $meta: 'vectorSearchScore' },
         },
       },
-    ])
-    .toArray();
+    ]).toArray()
+  );
+}
 
-  return results;
+export async function clearDocuments(): Promise<void> {
+  const collection = await getCollection();
+  const result = await collection.deleteMany({});
+  console.log(`🗑️  Cleared ${result.deletedCount} old documents from MongoDB`);
 }
 
 export async function closeConnection(): Promise<void> {
@@ -74,11 +73,4 @@ export async function closeConnection(): Promise<void> {
     await client.close();
     client = null;
   }
-}
-
-  // Delete all documents from the collection (used before re-ingestion)
-export async function clearDocuments(): Promise<void> {
-  const collection = await getCollection();
-  const result = await collection.deleteMany({});
-  console.log(`🗑️  Cleared ${result.deletedCount} old documents from MongoDB`);
 }

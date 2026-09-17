@@ -1,7 +1,7 @@
-import "dotenv/config";
-import * as readline from "readline";
-import { askWithRAG, Message } from "./services/ragService";
-import { closeConnection } from "./services/vectorStore";
+import 'dotenv/config';
+import * as readline from 'readline';
+import { askWithRAG, Message } from './services/ragService';
+import { closeConnection } from './services/vectorStore';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -18,33 +18,35 @@ async function main() {
   const history: Message[] = [];
 
   while (true) {
-    const question = await ask("You: ");
+    const question = await ask('You: ');
 
-    if (question.toLowerCase() === "exit") {
-      console.log("Goodbye!");
+    if (question.toLowerCase() === 'exit') {
+      console.log('Goodbye!');
       break;
     }
 
     if (!question.trim()) continue;
 
-    console.log("\n🔍 Searching docs...\n");
-    process.stdout.write("Assistant: ");
+    try {
+      console.log('\n🔍 Searching docs...\n');
+      process.stdout.write('Assistant: ');
 
-    // Stream tokens directly to stdout as they arrive
-    const { answer, sources } = await askWithRAG(question, history, (token) => {
-      process.stdout.write(token);
-    });
+      const { answer, sources } = await askWithRAG(question, history, (token) => {
+        process.stdout.write(token);
+      });
 
-    console.log("\n\n📚 Sources used:");
-    sources.forEach((s) =>
-      console.log(`  • ${s.source} (similarity: ${s.score})`),
-    );
-    console.log();
+      console.log('\n\n📚 Sources used:');
+      sources.forEach((s) => console.log(`  • ${s.source} (similarity: ${s.score})`));
+      console.log();
 
-    history.push(
-      { role: "user", content: question },
-      { role: "assistant", content: answer },
-    );
+      history.push(
+        { role: 'user', content: question },
+        { role: 'assistant', content: answer }
+      );
+    } catch (error) {
+      console.error('\n❌ Error:', error instanceof Error ? error.message : 'Unknown error');
+      console.log('Please try again.\n');
+    }
   }
 
   rl.close();
