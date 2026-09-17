@@ -4,8 +4,13 @@ import { vectorSearch } from './vectorStore';
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+export interface Message {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 // Build a prompt that includes retrieved context chunks
-function buildPrompt(question: string, contextChunks: { text: string; source: string }[]): string {
+function buildSystemPrompt(contextChunks: { text: string; source: string }[]): string {
   const context = contextChunks
     .map((chunk, i) => `[${i + 1}] (source: ${chunk.source})\n${chunk.text}`)
     .join('\n\n');
@@ -15,16 +20,16 @@ function buildPrompt(question: string, contextChunks: { text: string; source: st
 Use the following documentation excerpts to answer the question. If the context doesn't contain enough information, say so honestly.
 
 CONTEXT:
-${context}
-
-QUESTION:
-${question}`;
+${context}`;
 }
 
-// Main RAG function: search relevant docs → ask Claude
-export async function askWithRAG(question: string): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
+// Main RAG function: search relevant docs → ask Claude with conversation history
+export async function askWithRAG(
+  question: string,
+  history: Message[]
+): Promise<{ answer: string; sources: { source: string; score: string }[] }> {
   // Step 1: convert question to embedding
-const queryEmbedding = await generateEmbedding(question, 'query');
+  const queryEmbedding = await generateEmbedding(question, 'query');
 
   // Step 2: find top-5 most relevant chunks from MongoDB
   const relevantChunks = await vectorSearch(queryEmbedding, 5);
@@ -33,13 +38,18 @@ const queryEmbedding = await generateEmbedding(question, 'query');
     return { answer: 'No relevant documentation found for your question.', sources: [] };
   }
 
-  // Step 3: build prompt with context and send to Claude
-  const prompt = buildPrompt(question, relevantChunks);
+  // Step 3: build system prompt with context
+  const systemPrompt = buildSystemPrompt(relevantChunks);
 
+  // Step 4: send conversation history + new question to Claude
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5',
     max_tokens: 1024,
-    messages: [{ role: 'user', content: prompt }],
+    system: systemPrompt,
+    messages: [
+      ...history,
+      { role: 'user', content: question },
+    ],
   });
 
   const textBlock = response.content.find((block) => block.type === 'text');
