@@ -1,11 +1,10 @@
 import { VoyageAIClient } from 'voyageai';
+import { VOYAGE_API_KEY, MODELS } from '../config';
 
-const client = new VoyageAIClient({
-  apiKey: process.env.VOYAGE_API_KEY,
-});
+const client = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
 
 /**
- * Generates an embedding vector for a given text.
+ * Generates an embedding vector for a given text using Voyage AI.
  *
  * @param text - The input text to embed
  * @param inputType - 'document' for indexing, 'query' for search queries
@@ -17,15 +16,12 @@ export async function generateEmbedding(
 ): Promise<number[]> {
   const response = await client.embed({
     input: text,
-    model: 'voyage-3-lite',
+    model: MODELS.embedding,
     inputType,
   });
 
   const embedding = response.data?.[0]?.embedding;
-
-  if (!embedding) {
-    throw new Error('No embedding returned from Voyage AI');
-  }
+  if (!embedding) throw new Error('No embedding returned from Voyage AI');
 
   return embedding;
 }
@@ -33,14 +29,9 @@ export async function generateEmbedding(
 /**
  * Calculates cosine similarity between two vectors.
  * Returns a value between -1 (opposite) and 1 (identical).
- *
- * @param a - First vector
- * @param b - Second vector
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
-  if (a.length !== b.length) {
-    throw new Error('Vectors must have the same length');
-  }
+  if (a.length !== b.length) throw new Error('Vectors must have the same length');
 
   const dotProduct = a.reduce((sum, val, i) => sum + val * b[i], 0);
   const magnitudeA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));

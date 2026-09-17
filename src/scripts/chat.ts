@@ -1,7 +1,9 @@
 import 'dotenv/config';
+import '../config'; // triggers environment validation on startup
 import * as readline from 'readline';
-import { askWithRAG, Message } from './services/ragService';
-import { closeConnection } from './services/vectorStore';
+import { askWithRAG } from '../services/ragService';
+import type { Message } from '../types';
+import { closeConnection } from '../services/vectorStore';
 
 const rl = readline.createInterface({
   input: process.stdin,
@@ -11,6 +13,14 @@ const rl = readline.createInterface({
 function ask(prompt: string): Promise<string> {
   return new Promise((resolve) => rl.question(prompt, resolve));
 }
+
+// Handle Ctrl+C gracefully — wait for current request then close cleanly
+process.on('SIGINT', async () => {
+  console.log('\n\nShutting down gracefully...');
+  rl.close();
+  await closeConnection();
+  process.exit(0);
+});
 
 async function main() {
   console.log('🤖 AI Docs Chatbot (type "exit" to quit)\n');

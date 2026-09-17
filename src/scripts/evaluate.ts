@@ -1,60 +1,8 @@
 import 'dotenv/config';
-import { askWithRAG, Message } from './services/ragService';
-import { closeConnection } from './services/vectorStore';
-
-interface TestCase {
-  question: string;
-  expectedKeywords: string[];
-}
-
-interface EvalResult {
-  question: string;
-  answer: string;
-  sources: { source: string; score: string }[];
-  topScore: number;
-  keywordsFound: string[];
-  keywordsMissed: string[];
-  passed: boolean;
-}
-
-// Test cases aligned with the actual document corpus
-const TEST_CASES: TestCase[] = [
-  {
-    question: 'How do I use streaming with the Anthropic API?',
-    expectedKeywords: ['stream', 'event', 'text'],
-  },
-  {
-    question: 'What embedding models does OpenAI offer?',
-    expectedKeywords: ['embedding', 'ada', 'model'],
-  },
-  {
-    question: 'How do I implement RAG with vector search?',
-    expectedKeywords: ['retrieval', 'vector', 'embedding', 'search'],
-  },
-  {
-    question: 'What are the differences between GPT-4 and Claude?',
-    expectedKeywords: ['model', 'api', 'token'],
-  },
-  {
-    question: 'How does prompt engineering improve model responses?',
-    expectedKeywords: ['prompt', 'model', 'instruction'],
-  },
-];
-
-const CONVERSATION_TEST: { question: string; expectedKeywords: string[] }[] = [
-  {
-    question: 'What is prompt engineering?',
-    expectedKeywords: ['prompt', 'instruction', 'model'],
-  },
-  {
-    question: 'Can you give me an example of that?',
-    expectedKeywords: ['example', 'prompt'],
-  },
-  {
-    question: 'How does this relate to RAG?',
-    expectedKeywords: ['retrieval', 'context', 'generation'],
-  },
-];
+import { askWithRAG } from '../services/ragService';
+import type { Message, EvalResult } from '../types';
+import { TEST_CASES, CONVERSATION_TEST } from './testCases';
+import { closeConnection } from '../services/vectorStore';
 
 function checkKeywords(answer: string, keywords: string[]): { found: string[]; missed: string[] } {
   const lowerAnswer = answer.toLowerCase();

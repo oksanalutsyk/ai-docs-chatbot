@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { insertDocument, vectorSearch, closeConnection } from './services/vectorStore';
-import { generateEmbedding } from './services/embeddings';
+import { insertDocument, vectorSearch, closeConnection } from '../services/vectorStore';
+import { generateEmbedding } from '../services/embeddings';
 
 const testDocs = [
   { text: 'How to use streaming in Anthropic API', source: 'anthropic-docs' },

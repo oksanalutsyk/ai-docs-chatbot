@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { generateEmbedding, cosineSimilarity } from './services/embeddings';
+import { generateEmbedding, cosineSimilarity } from '../services/embeddings';
 
 // Phrases from different topics — embeddings should cluster them correctly
 const phrases = [

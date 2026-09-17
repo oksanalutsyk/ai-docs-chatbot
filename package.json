@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "tsx src/index.ts",
+    "chat": "tsx src/scripts/chat.ts",
+    "ingest": "tsx src/scripts/ingest.ts",
+    "evaluate": "tsx src/scripts/evaluate.ts",
     "build": "tsc",
-    "test:embeddings": "tsx src/test-embeddings.ts",
-    "chat": "tsx src/chat.ts",
-    "ingest": "tsx src/ingest.ts",
-    "evaluate": "tsx src/evaluate.ts"
+    "debug:embeddings": "tsx src/debug/test-embeddings.ts",
+    "debug:vectorstore": "tsx src/debug/test-vectorstore.ts"
   },
   "keywords": [],
   "author": "",
