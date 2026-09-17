@@ -47,7 +47,7 @@ src/
 │   └── index.ts          # shared TypeScript interfaces
 ├── services/
 │   ├── ragService.ts     # main RAG pipeline
-│   ├── documentLoader.ts # GitHub fetching + markdown-aware chunking
+│   ├── documentLoader.ts # GitHub fetching + chunking for .md and .ipynb files
 │   ├── embeddings.ts     # Voyage AI embedding, cosine similarity, reranking
 │   └── vectorStore.ts    # MongoDB insert, search, clear
 ├── utils/
@@ -104,7 +104,7 @@ Create a vector search index on your `documents` collection with this definition
 
 ### 4. Ingest documentation
 
-Fetches markdown files from GitHub and stores embeddings in MongoDB:
+Fetches markdown and Jupyter notebook files from GitHub and stores embeddings in MongoDB:
 
 ```bash
 npm run ingest
@@ -159,7 +159,9 @@ Test cases are defined in `src/scripts/testCases.ts`.
 
 ## Document Corpus
 
-- **Anthropic:** anthropic-cookbook, anthropic-sdk-python, claude-cookbooks, courses
-- **OpenAI:** openai-cookbook, openai-python
+- **Anthropic:** anthropic-cookbook (patterns), courses (API fundamentals + prompt engineering notebooks)
+- **OpenAI:** openai-cookbook (articles, vector databases, evaluation examples), openai-python
 
-Chunking strategy: markdown files are split by `##`/`###` headers to preserve semantic boundaries; plain text falls back to word-based chunking with overlap.
+Both `.md` and `.ipynb` (Jupyter notebook) files are supported. Notebooks are converted to text — markdown cells kept as-is, code cells wrapped in fenced code blocks — then chunked the same way as markdown. Total corpus: ~1,269 chunks.
+
+Chunking strategy: files are split by `##`/`###` headers to preserve semantic boundaries; plain text falls back to word-based chunking with overlap.

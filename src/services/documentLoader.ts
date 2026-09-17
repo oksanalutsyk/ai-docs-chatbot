@@ -2,7 +2,21 @@ import axios from 'axios';
 import { CHUNKING, GITHUB_HEADERS } from '../config';
 import type { DocumentChunk, GitHubFile } from '../types';
 
+// ─── Jupyter notebook types ───────────────────────────────────────────────────
 
+interface NotebookCell {
+  cell_type: 'markdown' | 'code' | 'raw';
+  source: string[] | string;
+}
+
+interface JupyterNotebook {
+  cells: NotebookCell[];
+  metadata?: {
+    kernelspec?: { language?: string };
+  };
+}
+
+// ─── Chunking strategies ──────────────────────────────────────────────────────
 
 /**
  * Splits text into overlapping word-based chunks.
@@ -30,11 +44,9 @@ function chunkByWords(text: string, source: string, path: string): DocumentChunk
  * - A section exceeds the max chunk size
  */
 function chunkByHeaders(text: string, source: string, path: string): DocumentChunk[] {
-  // Split on lines that start with ## or ### (h2/h3 headers)
   const sections = text.split(/\n(?=#{2,3}\s)/);
 
   if (sections.length <= 1) {
-    // No headers found — fall back to word-based chunking
     return chunkByWords(text, source, path);
   }
 
@@ -47,10 +59,8 @@ function chunkByHeaders(text: string, source: string, path: string): DocumentChu
     const wordCount = trimmed.split(/\s+/).length;
 
     if (wordCount <= CHUNKING.chunkSize) {
-      // Section fits in one chunk
       chunks.push({ text: trimmed, source, path });
     } else {
-      // Section too large — split it with word-based chunking
       const subChunks = chunkByWords(trimmed, source, path);
       chunks.push(...subChunks);
     }
@@ -60,25 +70,54 @@ function chunkByHeaders(text: string, source: string, path: string): DocumentChu
 }
 
 /**
- * Selects the appropriate chunking strategy based on file type.
- * Designed to be extended as new file types are supported.
+ * Extracts text from a Jupyter notebook (.ipynb) and chunks it.
+ * Markdown cells are included as-is; code cells are wrapped in code fences.
+ * The combined text is then split by headers (same strategy as .md files).
+ */
+function parseNotebook(content: string, source: string, path: string): DocumentChunk[] {
+  const notebook = JSON.parse(content) as JupyterNotebook;
+  const language = notebook.metadata?.kernelspec?.language ?? 'python';
+
+  const text = notebook.cells
+    .filter((cell) => cell.cell_type === 'markdown' || cell.cell_type === 'code')
+    .map((cell) => {
+      const src = Array.isArray(cell.source) ? cell.source.join('') : cell.source;
+      if (!src.trim()) return '';
+      if (cell.cell_type === 'code') return `\`\`\`${language}\n${src}\n\`\`\``;
+      return src;
+    })
+    .filter(Boolean)
+    .join('\n\n');
+
+  return chunkByHeaders(text, source, path);
+}
+
+/**
+ * Selects the appropriate chunking strategy based on file extension.
  */
 function chunkByStrategy(
   text: string,
   source: string,
   path: string,
-  fileType: string
+  fileExt: string
 ): DocumentChunk[] {
-  switch (fileType) {
+  switch (fileExt) {
     case '.md':
       return chunkByHeaders(text, source, path);
+    case '.ipynb':
+      return parseNotebook(text, source, path);
     default:
       return chunkByWords(text, source, path);
   }
 }
 
+// ─── GitHub fetching ──────────────────────────────────────────────────────────
+
+const SUPPORTED_EXTENSIONS = ['.md', '.ipynb'];
+
 /**
- * Recursively fetches all markdown files from a GitHub folder and subfolders.
+ * Recursively fetches all supported files from a GitHub folder and subfolders.
+ * Supports: .md (markdown) and .ipynb (Jupyter notebooks).
  */
 async function fetchFilesRecursively(
   owner: string,
@@ -86,16 +125,17 @@ async function fetchFilesRecursively(
   folderPath: string,
   source: string
 ): Promise<DocumentChunk[]> {
-  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${folderPath}`;
+  const encodedPath = folderPath.split('/').map(encodeURIComponent).join('/');
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${encodedPath}`;
   const { data: items } = await axios.get<GitHubFile[]>(apiUrl, { headers: GITHUB_HEADERS });
 
   const allChunks: DocumentChunk[] = [];
 
   for (const item of items) {
-    if (item.type === 'file' && item.name.endsWith('.md')) {
-      const { data: content } = await axios.get<string>(item.download_url);
-      const fileExt = item.name.slice(item.name.lastIndexOf('.'));
-      const chunks = chunkByStrategy(content, source, item.path, fileExt);
+    const ext = item.name.slice(item.name.lastIndexOf('.'));
+    if (item.type === 'file' && SUPPORTED_EXTENSIONS.includes(ext)) {
+      const { data: content } = await axios.get<string>(item.download_url, { responseType: 'text' });
+      const chunks = chunkByStrategy(content, source, item.path, ext);
       allChunks.push(...chunks);
       console.log(`  ✓ ${item.path} → ${chunks.length} chunks`);
     } else if (item.type === 'dir') {
@@ -109,7 +149,7 @@ async function fetchFilesRecursively(
 }
 
 /**
- * Public entry point: fetches and chunks all markdown files
+ * Public entry point: fetches and chunks all supported files
  * from a GitHub repository folder (recursively).
  */
 export async function fetchGitHubDocs(
